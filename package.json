@@ -20,7 +20,7 @@
   },
   "scripts": {
     "dev": "react-scripts start",
-    "start": "react-scripts build && react-scripts start",
+    "start": "react-scripts build && yarn global add serve && serve -s build",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

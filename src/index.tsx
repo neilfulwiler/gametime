@@ -7,14 +7,6 @@ import { shuffle } from "./utils";
 
 // from https://blog.bitsrc.io/starting-with-react-16-and-three-js-in-5-minutes-3079b8829817
 
-const Z = 90;
-const Y = 89;
-const X = 88;
-
-const A = 65;
-const B = 66;
-const C = 67;
-
 type Direction = "N" | "S" | "NW" | "SW" | "SE" | "NE";
 
 type Resource = "Sheep" | "Ore" | "Brick" | "Wheat" | "Wood";
@@ -277,7 +269,7 @@ class App extends Component {
       const text = new THREE.Mesh(
         new THREE.BufferGeometry().fromGeometry(textGeometry),
         new THREE.MeshStandardMaterial({
-          color: roll == 6 || roll == 8 ? "#FF0000" : "#000000",
+          color: roll === 6 || roll === 8 ? "#FF0000" : "#000000",
         })
       );
       text.position.x = x - 0.1;
