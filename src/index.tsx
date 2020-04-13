@@ -2,7 +2,8 @@ import React, { Component } from "react";
 import ReactDOM from "react-dom";
 import * as THREE from "three";
 import * as serviceWorker from "./serviceWorker";
-import { writeHeapSnapshot } from "v8";
+import * as _ from "lodash";
+import { shuffle } from "./utils";
 
 // from https://blog.bitsrc.io/starting-with-react-16-and-three-js-in-5-minutes-3079b8829817
 
@@ -17,6 +18,23 @@ const C = 67;
 type Direction = "N" | "S" | "NW" | "SW" | "SE" | "NE";
 
 type Resource = "Sheep" | "Ore" | "Brick" | "Wheat" | "Wood";
+
+type Robber = "Robber";
+
+const RobberColor = "#847545";
+
+// prettier-ignore
+const NUMBERS: (number | Robber)[] = [9, 8, 10, 2, 9, 4, 6, 11, 10, 8, 3, 5, 4, 3, 5, 6, 11, "Robber"];
+
+const RESOURCES: Resource[] = _.concat(
+  Array(4).fill("Sheep"),
+  Array(3).fill("Brick"),
+  Array(3).fill("Ore"),
+  Array(4).fill("Wheat"),
+  Array(4).fill("Wood")
+) as Resource[];
+
+console.log(RESOURCES);
 
 const ResourceColors: { readonly [key in Resource]: string } = {
   Sheep: "#66BB6A",
@@ -50,6 +68,13 @@ const indicesOfFaces = [
   4,5,6,       5,6,7,
 ];
 
+const translate = (
+  [x, y]: [number, number],
+  [dx, dy]: [number, number]
+): [number, number] => {
+  return [x + dx, y + dy];
+};
+
 const hexPoints: [number, number][] = [
   [0, Math.sin(Math.PI / 3)],
   [Math.cos(Math.PI / 3), 2 * Math.sin(Math.PI / 3)],
@@ -59,12 +84,9 @@ const hexPoints: [number, number][] = [
   [1 * Math.cos(Math.PI / 3), 0],
 ];
 
-const translate = (
-  [x, y]: [number, number],
-  [dx, dy]: [number, number]
-): [number, number] => {
-  return [x + dx, y + dy];
-};
+const hexPointsAdjusted = hexPoints.map((point: [number, number]) =>
+  translate(point, [-Math.cos(Math.PI / 3) - 0.5, -Math.sin(Math.PI / 3)])
+);
 
 function choice<T>(a: T[]): T {
   return a[Math.floor(Math.random() * a.length)];
@@ -75,7 +97,7 @@ const makeHex = function (translation: [number, number]) {
   const points: [
     number,
     number
-  ][] = hexPoints.map((hexPoint: [number, number]) =>
+  ][] = hexPointsAdjusted.map((hexPoint: [number, number]) =>
     translate(hexPoint, translation)
   );
   shape.moveTo(points[0][0], points[0][1]);
@@ -110,8 +132,18 @@ const composeTranslations = (
   ];
 };
 
+type TileProperties = [[number, number], number | Robber, Resource | Robber];
+
 class App extends Component {
   componentDidMount() {
+    var loader = new THREE.FontLoader();
+
+    loader.load("fonts/Roboto Light_Regular.json", (font) => {
+      this.withFont(font);
+    });
+  }
+
+  withFont(font: any) {
     var scene = new THREE.Scene();
     var light = new THREE.PointLight(0xffffff, 1, 100);
     light.position.set(-3, 0, 2);
@@ -122,11 +154,63 @@ class App extends Component {
       0.1,
       1000
     );
+    camera.position.z = 7;
 
     var renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     // @ts-ignore
     this.mount.appendChild(renderer.domElement);
+
+    var addKeys = function (keys: { [key: string]: () => void }): void {
+      document.addEventListener("keypress", (event) => {
+        Object.keys(keys).forEach((key: string): void => {
+          if (key === event.key) {
+            keys[key]();
+            renderer.render(scene, camera);
+            console.log("rendered");
+          }
+        });
+      });
+    };
+
+    var makeNumber = function (roll: number, [x, y]: [number, number]): void {
+      var textGeometry = new THREE.TextGeometry("" + roll, {
+        font: font,
+        size: 0.2,
+        height: 0.2,
+        curveSegments: 1,
+        bevelEnabled: false,
+        bevelThickness: 0,
+        bevelSize: 0,
+        bevelOffset: 0,
+        bevelSegments: 0,
+      });
+
+      textGeometry.computeBoundingBox();
+      textGeometry.computeVertexNormals();
+      scene.add(
+        new THREE.Mesh(
+          new THREE.BufferGeometry().fromGeometry(textGeometry),
+          new THREE.MeshStandardMaterial({
+            color: "#000000",
+          })
+        )
+      );
+
+      var geometry = new THREE.CircleGeometry(0.2, 32);
+      var material = new THREE.MeshStandardMaterial({
+        color: "#ffffff",
+      });
+      var cube = new THREE.Mesh(geometry, material);
+      cube.position.x = x;
+      cube.position.y = y;
+      cube.position.z = 0.2;
+      addKeys({
+        i: () => (cube.position.z += 0.1),
+        k: () => (cube.position.z -= 0.1),
+      });
+      scene.add(cube);
+    };
 
     var makeCube = function (
       translation: [number, number],
@@ -136,8 +220,6 @@ class App extends Component {
       var material = new THREE.MeshStandardMaterial({ color });
       var cube = new THREE.Mesh(geometry, material);
       scene.add(cube);
-
-      camera.position.z = 5;
     };
 
     const movements: Direction[][] = [
@@ -162,29 +244,41 @@ class App extends Component {
       ["NW", "N"],
     ];
 
-    const translations = movements.map((directions): [
-      [number, number],
-      string
-    ] => {
-      const position = translate(
-        [0, 0],
-        composeTranslations(
-          directions.map((direction) => DIRECTION_TRANSLATIONS[direction])
-        )
-      );
-      const resource: Resource = choice(
-        Object.keys(ResourceColors)
-      ) as Resource;
-      console.log(resource);
-      return [position, ResourceColors[resource]];
-    });
+    const numbers = shuffle(NUMBERS);
+    const robberIndex = numbers.findIndex((val) => val === "Robber");
+    const resources = shuffle(RESOURCES);
 
-    translations.forEach(([translation, color]) =>
-      makeCube(translation, color)
+    const translations = movements.map(
+      (directions, idx): TileProperties => {
+        const position = translate(
+          [0, 0],
+          composeTranslations(
+            directions.map((direction) => DIRECTION_TRANSLATIONS[direction])
+          )
+        );
+        return [
+          position,
+          numbers[idx],
+          idx === robberIndex
+            ? "Robber"
+            : idx > robberIndex
+            ? resources[idx - 1]
+            : resources[idx],
+        ];
+      }
     );
 
+    translations.forEach(([translation, number, resource]: TileProperties) => {
+      makeCube(
+        translation,
+        resource === "Robber" ? RobberColor : ResourceColors[resource]
+      );
+      if (number !== "Robber") {
+        makeNumber(number, translation);
+      }
+    });
+
     renderer.render(scene, camera);
-    //animate();
   }
   render() {
     // @ts-ignore
