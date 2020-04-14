@@ -4,6 +4,7 @@ import * as THREE from "three";
 import * as serviceWorker from "./serviceWorker";
 import * as _ from "lodash";
 import { shuffle } from "./utils";
+import { addDice } from "./dice";
 
 // from https://blog.bitsrc.io/starting-with-react-16-and-three-js-in-5-minutes-3079b8829817
 
@@ -186,14 +187,17 @@ class App extends Component {
     camera.position.z = 7;
     var cameraPivot = new THREE.Object3D();
     const yAxis = new THREE.Vector3(0, 1, 0);
+    const xAxis = new THREE.Vector3(1, 0, 0);
     const zAxis = new THREE.Vector3(0, 0, 1);
     scene.add(cameraPivot);
     cameraPivot.add(camera);
     camera.lookAt(cameraPivot.position);
-    cameraPivot.rotateOnAxis(yAxis, -0.5);
+    cameraPivot.rotateOnAxis(xAxis, 0.7);
     addKeys({
       a: () => cameraPivot.rotateOnAxis(yAxis, 0.1),
-      f: () => cameraPivot.rotateOnAxis(yAxis, -0.1),
+      d: () => cameraPivot.rotateOnAxis(yAxis, -0.1),
+      w: () => cameraPivot.rotateOnAxis(xAxis, 0.1),
+      s: () => cameraPivot.rotateOnAxis(xAxis, -0.1),
     });
 
     var renderer = new THREE.WebGLRenderer();
@@ -376,7 +380,23 @@ class App extends Component {
     makeRoad([["NE"], 2], [["NE", "N"], 3], BLACK);
     makeSettlement([["NE"], 2], BLACK);
 
-    renderer.render(scene, camera);
+    var geo = new THREE.PlaneBufferGeometry(2000, 2000, 8, 8);
+    var mat = new THREE.MeshStandardMaterial({
+      color: 0x0ff000,
+      side: THREE.DoubleSide,
+    });
+    var plane = new THREE.Mesh(geo, mat);
+
+    //scene.add(plane);
+
+    const update = addDice(scene);
+
+    const animate = () => {
+      update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
   }
   render() {
     // @ts-ignore
